@@ -1,0 +1,46 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: fod-inspection
+  profiles:
+    active: dev
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/fod_inspection?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.airport.fod.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: dr
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+fod:
+  photo:
+    upload-path: /data/fod/photos
+    access-url: http://localhost:8080/api/photos
+
+knife4j:
+  enable: true
+  openapi:
+    title: 机场跑道异物巡查系统API
+    description: 机场跑道异物巡查系统后端接口文档
+    version: 1.0.0
+    concat: admin
