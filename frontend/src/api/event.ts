@@ -1,10 +1,12 @@
 import request from '@/utils/request';
 import type {
   FodEvent,
+  FodReview,
   EventReportDTO,
   EventEvaluateDTO,
   EventHandleDTO,
   EventCloseDTO,
+  ReviewAddDTO,
   PageQuery,
   PageResult,
   Result,
@@ -65,5 +67,21 @@ export const eventApi = {
 
   getStatistics: (): Promise<Result<Record<string, number>>> => {
     return request.get('/event/statistics');
+  },
+
+  addReview: (data: ReviewAddDTO): Promise<Result<any>> => {
+    return request.post('/event/review', data);
+  },
+
+  getReviews: (eventId: number): Promise<Result<FodReview[]>> => {
+    return request.get(`/event/review/${eventId}`);
+  },
+
+  getMergedChildren: (parentEventId: number): Promise<Result<FodEvent[]>> => {
+    return request.get(`/event/merged-children/${parentEventId}`);
+  },
+
+  getMergedParent: (childEventId: number): Promise<Result<FodEvent>> => {
+    return request.get(`/event/merged-parent/${childEventId}`);
   },
 };

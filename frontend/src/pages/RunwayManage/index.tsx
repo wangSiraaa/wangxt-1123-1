@@ -16,6 +16,7 @@ const RunwayManage: React.FC = () => {
     normal: 0,
     frozen: 0,
     maintenance: 0,
+    restricted: 0,
   });
 
   useEffect(() => {
@@ -37,12 +38,14 @@ const RunwayManage: React.FC = () => {
       const normalCount = runwayList.filter((r) => r.status === 1).length;
       const frozenCount = runwayList.filter((r) => r.status === 2).length;
       const maintenanceCount = runwayList.filter((r) => r.status === 3).length;
+      const restrictedCount = runwayList.filter((r) => r.status === 4).length;
 
       setStatistics({
         total: runwayList.length,
         normal: normalCount,
         frozen: frozenCount,
         maintenance: maintenanceCount,
+        restricted: restrictedCount,
       });
     } finally {
       setLoading(false);
@@ -61,6 +64,7 @@ const RunwayManage: React.FC = () => {
     { title: '跑道总数', value: statistics.total, color: '#1890ff', icon: <RocketOutlined /> },
     { title: '正常', value: statistics.normal, color: '#52c41a' },
     { title: '冻结', value: statistics.frozen, color: '#f5222d' },
+    { title: '受限', value: statistics.restricted, color: '#fa541c' },
     { title: '维修中', value: statistics.maintenance, color: '#faad14' },
   ];
 
@@ -98,13 +102,17 @@ const RunwayManage: React.FC = () => {
       width: 120,
       render: (val: number, record: Runway) => (
         <Space>
-          <Tag color={val === 1 ? 'red' : 'green'}>{val === 1 ? '已冻结' : '正常放行'}</Tag>
+          {record.status === 4 ? (
+            <Tag color="volcano">受限</Tag>
+          ) : (
+            <Tag color={val === 1 ? 'red' : 'green'}>{val === 1 ? '已冻结' : '正常放行'}</Tag>
+          )}
           {record.freezeOperator && <span style={{ color: '#999' }}>{record.freezeOperator}</span>}
         </Space>
       ),
     },
     {
-      title: '冻结原因',
+      title: '限制/冻结原因',
       dataIndex: 'freezeReason',
       ellipsis: true,
     },

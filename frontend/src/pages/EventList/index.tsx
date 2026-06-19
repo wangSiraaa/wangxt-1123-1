@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Table, Tag, Button, Input, Select, Space, Card, Row, Col, Statistic, Popconfirm, Modal, Image, message
+  Table, Tag, Button, Input, Select, Space, Card, Row, Col, Statistic, Popconfirm, Modal, Image, message, Badge
 } from 'antd';
-import { PlusOutlined, SearchOutlined, EyeOutlined, VerticalAlignTopOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, EyeOutlined, VerticalAlignTopOutlined, MergeCellsOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { eventApi } from '@/api/event';
@@ -106,7 +106,17 @@ const EventList: React.FC = () => {
       title: '事件编号',
       dataIndex: 'eventNo',
       width: 160,
-      render: (val: string) => <code style={{ color: '#1890ff' }}>{val}</code>,
+      render: (val: string, record: FodEvent) => (
+        <Space>
+          <code style={{ color: '#1890ff' }}>{val}</code>
+          {record.mergeCount > 0 && (
+            <Tag color="purple" icon={<MergeCellsOutlined />}>{record.mergeCount}合并</Tag>
+          )}
+          {record.mergedParentId && (
+            <Tag color="cyan">已合并</Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: '跑道',

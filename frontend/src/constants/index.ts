@@ -52,12 +52,14 @@ export const RunwayStatusEnum = {
   NORMAL: 1,
   FROZEN: 2,
   MAINTENANCE: 3,
+  RESTRICTED: 4,
 } as const;
 
 export const RunwayStatusMap: Record<number, { label: string; color: string }> = {
   1: { label: '正常', color: 'success' },
   2: { label: '冻结', color: 'error' },
   3: { label: '维修中', color: 'warning' },
+  4: { label: '受限', color: 'volcano' },
 };
 
 export const PhotoTypeEnum = {
@@ -77,6 +79,8 @@ export const ClearanceOperationEnum = {
   UNFREEZE_RUNWAY: 2,
   ALLOW_CLEARANCE: 3,
   DENY_CLEARANCE: 4,
+  RESTRICT_RUNWAY: 5,
+  UNRESTRICT_RUNWAY: 6,
 } as const;
 
 export const ClearanceOperationMap: Record<number, string> = {
@@ -84,6 +88,8 @@ export const ClearanceOperationMap: Record<number, string> = {
   2: '解除冻结',
   3: '允许放行',
   4: '禁止放行',
+  5: '限制跑道',
+  6: '解除限制',
 };
 
 export const FodTypeOptions = [
@@ -100,3 +106,15 @@ export const FodSizeOptions = [
   { label: '中型 (5-15cm)', value: '中型 (5-15cm)' },
   { label: '大型 (>15cm)', value: '大型 (>15cm)' },
 ];
+
+export const ReviewTypeEnum = {
+  GENERAL: 1,
+  KEY: 2,
+  RECTIFICATION: 3,
+} as const;
+
+export const ReviewTypeMap: Record<number, { label: string; color: string }> = {
+  1: { label: '一般复盘', color: 'blue' },
+  2: { label: '重点复盘', color: 'orange' },
+  3: { label: '整改措施', color: 'red' },
+};

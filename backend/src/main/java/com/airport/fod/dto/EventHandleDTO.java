@@ -3,6 +3,7 @@ package com.airport.fod.dto;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
+import java.time.LocalDateTime;
 
 public class EventHandleDTO implements Serializable {
 
@@ -17,6 +18,8 @@ public class EventHandleDTO implements Serializable {
     private String handlerId;
 
     private String handlerName;
+
+    private LocalDateTime estimatedRecoveryTime;
 
     public Long getEventId() {
         return eventId;
@@ -48,5 +51,13 @@ public class EventHandleDTO implements Serializable {
 
     public void setHandlerName(String handlerName) {
         this.handlerName = handlerName;
+    }
+
+    public LocalDateTime getEstimatedRecoveryTime() {
+        return estimatedRecoveryTime;
+    }
+
+    public void setEstimatedRecoveryTime(LocalDateTime estimatedRecoveryTime) {
+        this.estimatedRecoveryTime = estimatedRecoveryTime;
     }
 }

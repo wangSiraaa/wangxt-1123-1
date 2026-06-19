@@ -19,4 +19,9 @@ public interface FodEventMapper extends BaseMapper<FodEvent> {
 
     @Select("SELECT COUNT(*) FROM fod_event WHERE dr = 0 AND is_top = 1")
     Integer countTopEvents();
+
+    @Select("SELECT * FROM fod_event WHERE dr = 0 AND runway_id = #{runwayId} AND location = #{location} " +
+            "AND status NOT IN (8, 9) AND merged_parent_id IS NULL " +
+            "AND DATE(report_time) = CURDATE() ORDER BY create_time DESC LIMIT 1")
+    FodEvent findSameLocationToday(@Param("runwayId") Long runwayId, @Param("location") String location);
 }

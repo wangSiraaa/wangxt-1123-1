@@ -20,6 +20,10 @@ public class FodConstants {
     public static final String OPERATION_CLOSE = "close";
     public static final String OPERATION_CANCEL = "cancel";
     public static final String OPERATION_UPDATE = "update";
+    public static final String OPERATION_REVIEW = "review";
+    public static final String OPERATION_MERGE = "merge";
+    public static final String OPERATION_RESTRICT = "restrict";
+    public static final String OPERATION_UNRESTRICT = "unrestrict";
 
     public static final String DEFAULT_USER_ID = "system";
     public static final String DEFAULT_USER_NAME = "系统管理员";

@@ -95,7 +95,27 @@ public class BusinessRules {
             return false;
         }
         return EventStatusEnum.REPORTED.getCode().equals(eventStatus)
-            || EventStatusEnum.EVALUATING.getCode().equals(eventStatus);
+            || EventStatusEnum.EVALUATING.getCode().equals(eventStatus)
+            || EventStatusEnum.NOT_AFFECT.getCode().equals(eventStatus)
+            || EventStatusEnum.AFFECT.getCode().equals(eventStatus);
+    }
+
+    public static boolean shouldRestrictRunway(Integer status) {
+        return EventStatusEnum.AFFECT.getCode().equals(status);
+    }
+
+    public static boolean isSameDayMergeWindow(java.time.LocalDateTime reportTime) {
+        if (reportTime == null) {
+            return false;
+        }
+        java.time.LocalDate reportDate = reportTime.toLocalDate();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        return reportDate.equals(today);
+    }
+
+    public static boolean canMergeEvent(Integer status) {
+        return !EventStatusEnum.CLOSED.getCode().equals(status)
+            && !EventStatusEnum.CANCELLED.getCode().equals(status);
     }
 
     public static boolean canClose(boolean hasPhoto) {

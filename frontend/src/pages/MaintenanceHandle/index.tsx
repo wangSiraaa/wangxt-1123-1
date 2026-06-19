@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   Table, Tag, Button, Space, Card, Row, Col, Statistic, Modal, Form, Input,
-  message, Empty, Upload, List, Image
+  message, Empty, Upload, List, Image, DatePicker, Alert
 } from 'antd';
 import {
-  EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, UploadOutlined
+  EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, UploadOutlined, MergeCellsOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -31,6 +31,8 @@ const MaintenanceHandle: React.FC = () => {
   const [currentEvent, setCurrentEvent] = useState<FodEvent | null>(null);
   const [handleForm] = Form.useForm();
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [beforeFileList, setBeforeFileList] = useState<UploadFile[]>([]);
+  const [afterFileList, setAfterFileList] = useState<UploadFile[]>([]);
   const [statistics, setStatistics] = useState<Record<string, number>>({});
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -95,6 +97,8 @@ const MaintenanceHandle: React.FC = () => {
   const handleCompleteHandle = (record: FodEvent) => {
     setCurrentEvent(record);
     setFileList([]);
+    setBeforeFileList([]);
+    setAfterFileList([]);
     handleForm.resetFields();
     setHandleVisible(true);
   };
@@ -107,10 +111,27 @@ const MaintenanceHandle: React.FC = () => {
         handleResult: values.handleResult,
         handlerId: userId,
         handlerName: userName,
+        estimatedRecoveryTime: values.estimatedRecoveryTime
+          ? dayjs(values.estimatedRecoveryTime).format('YYYY-MM-DD HH:mm:ss')
+          : undefined,
       });
 
-      if (fileList.length > 0) {
-        const files = fileList.map((f) => f.originFileObj as File).filter(Boolean);
+      if (beforeFileList.length > 0) {
+        const files = beforeFileList.map((f) => f.originFileObj as File).filter(Boolean);
+        if (files.length > 0) {
+          await photoApi.upload(
+            currentEvent.id,
+            files,
+            PhotoTypeEnum.HANDLING_PHOTO,
+            userId,
+            userName,
+            '处理前照片'
+          );
+        }
+      }
+
+      if (afterFileList.length > 0) {
+        const files = afterFileList.map((f) => f.originFileObj as File).filter(Boolean);
         if (files.length > 0) {
           await photoApi.upload(
             currentEvent.id,
@@ -118,7 +139,7 @@ const MaintenanceHandle: React.FC = () => {
             PhotoTypeEnum.COMPLETED_PHOTO,
             userId,
             userName,
-            '处理完成后照片'
+            '处理后照片'
           );
         }
       }
@@ -127,6 +148,8 @@ const MaintenanceHandle: React.FC = () => {
       setHandleVisible(false);
       handleForm.resetFields();
       setFileList([]);
+      setBeforeFileList([]);
+      setAfterFileList([]);
       loadData();
       loadStatistics();
     } catch (e) {
@@ -256,6 +279,26 @@ const MaintenanceHandle: React.FC = () => {
     accept: 'image/*',
   };
 
+  const beforeUploadProps = {
+    fileList: beforeFileList,
+    onChange: ({ fileList: newFileList }: { fileList: UploadFile[] }) => {
+      setBeforeFileList(newFileList);
+    },
+    beforeUpload: () => false,
+    multiple: true,
+    accept: 'image/*',
+  };
+
+  const afterUploadProps = {
+    fileList: afterFileList,
+    onChange: ({ fileList: newFileList }: { fileList: UploadFile[] }) => {
+      setAfterFileList(newFileList);
+    },
+    beforeUpload: () => false,
+    multiple: true,
+    accept: 'image/*',
+  };
+
   return (
     <div>
       <Card style={{ marginBottom: 16 }}>
@@ -310,13 +353,34 @@ const MaintenanceHandle: React.FC = () => {
             <TextArea rows={4} placeholder="请详细描述处理结果" />
           </Form.Item>
 
-          <Form.Item label="上传处理后照片（可选）">
-            <Dragger {...uploadProps}>
+          <Form.Item
+            name="estimatedRecoveryTime"
+            label="预计恢复时间"
+          >
+            <DatePicker
+              showTime
+              style={{ width: '100%' }}
+              placeholder="请选择预计恢复时间"
+            />
+          </Form.Item>
+
+          <Form.Item label="处理前照片" required>
+            <Dragger {...beforeUploadProps}>
               <p className="ant-upload-drag-icon">
                 <UploadOutlined />
               </p>
-              <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-              <p className="ant-upload-hint">支持 jpg、png、gif 等图片格式，可多选</p>
+              <p className="ant-upload-text">点击或拖拽上传处理前照片</p>
+              <p className="ant-upload-hint">裂缝/碎片处理前的现场照片</p>
+            </Dragger>
+          </Form.Item>
+
+          <Form.Item label="处理后照片" required>
+            <Dragger {...afterUploadProps}>
+              <p className="ant-upload-drag-icon">
+                <UploadOutlined />
+              </p>
+              <p className="ant-upload-text">点击或拖拽上传处理后照片</p>
+              <p className="ant-upload-hint">修复完成后的现场照片</p>
             </Dragger>
           </Form.Item>
 

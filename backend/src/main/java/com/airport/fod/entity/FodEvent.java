@@ -77,6 +77,12 @@ public class FodEvent implements Serializable {
 
     private String remark;
 
+    private LocalDateTime estimatedRecoveryTime;
+
+    private Integer mergeCount;
+
+    private Long mergedParentId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
@@ -348,6 +354,30 @@ public class FodEvent implements Serializable {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public LocalDateTime getEstimatedRecoveryTime() {
+        return estimatedRecoveryTime;
+    }
+
+    public void setEstimatedRecoveryTime(LocalDateTime estimatedRecoveryTime) {
+        this.estimatedRecoveryTime = estimatedRecoveryTime;
+    }
+
+    public Integer getMergeCount() {
+        return mergeCount;
+    }
+
+    public void setMergeCount(Integer mergeCount) {
+        this.mergeCount = mergeCount;
+    }
+
+    public Long getMergedParentId() {
+        return mergedParentId;
+    }
+
+    public void setMergedParentId(Long mergedParentId) {
+        this.mergedParentId = mergedParentId;
     }
 
     public LocalDateTime getCreateTime() {

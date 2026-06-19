@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS `runway` (
   `runway_name` VARCHAR(128) NOT NULL COMMENT '跑道名称',
   `length` INT DEFAULT NULL COMMENT '跑道长度(米)',
   `width` INT DEFAULT NULL COMMENT '跑道宽度(米)',
-  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 1-正常 2-冻结 3-维修中',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 1-正常 2-冻结 3-维修中 4-受限',
   `is_frozen` TINYINT NOT NULL DEFAULT 0 COMMENT '是否冻结放行: 0-否 1-是',
   `freeze_reason` VARCHAR(512) DEFAULT NULL COMMENT '冻结原因',
   `freeze_time` DATETIME DEFAULT NULL COMMENT '冻结时间',
@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS `fod_event` (
   `has_photo` TINYINT NOT NULL DEFAULT 0 COMMENT '是否有现场照片: 0-否 1-是',
   `photo_count` INT NOT NULL DEFAULT 0 COMMENT '照片数量',
   `remark` VARCHAR(512) DEFAULT NULL COMMENT '备注',
+  `estimated_recovery_time` DATETIME DEFAULT NULL COMMENT '预计恢复时间',
+  `merge_count` INT NOT NULL DEFAULT 0 COMMENT '合并上报次数',
+  `merged_parent_id` BIGINT DEFAULT NULL COMMENT '合并到的父事件ID',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `dr` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记: 0-正常 1-删除',
@@ -64,7 +67,8 @@ CREATE TABLE IF NOT EXISTS `fod_event` (
   KEY `idx_runway_id` (`runway_id`),
   KEY `idx_status` (`status`),
   KEY `idx_is_top` (`is_top`),
-  KEY `idx_report_time` (`report_time`)
+  KEY `idx_report_time` (`report_time`),
+  KEY `idx_merged_parent_id` (`merged_parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='异物事件表';
 
 -- 事件照片表
@@ -145,3 +149,39 @@ INSERT INTO `runway` (`runway_code`, `runway_name`, `length`, `width`, `status`,
 ('RWY19', '19号跑道', 3600, 45, 1, '主跑道，东向西起降'),
 ('RWY07', '07号跑道', 2800, 45, 1, '备用跑道，西南向东北起降'),
 ('RWY25', '25号跑道', 2800, 45, 1, '备用跑道，东北向西南起降');
+
+-- 复盘记录表
+CREATE TABLE IF NOT EXISTS `fod_review` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `event_id` BIGINT NOT NULL COMMENT '事件ID',
+  `event_no` VARCHAR(32) NOT NULL COMMENT '事件编号',
+  `review_content` VARCHAR(2048) NOT NULL COMMENT '复盘内容',
+  `review_type` TINYINT NOT NULL DEFAULT 1 COMMENT '复盘类型: 1-一般复盘 2-重点复盘 3-整改措施',
+  `reviewer_id` VARCHAR(64) DEFAULT NULL COMMENT '复盘人ID',
+  `reviewer_name` VARCHAR(64) DEFAULT NULL COMMENT '复盘人姓名',
+  `review_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '复盘时间',
+  `attachment_urls` VARCHAR(2048) DEFAULT NULL COMMENT '附件地址(多个逗号分隔)',
+  `remark` VARCHAR(512) DEFAULT NULL COMMENT '备注',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `dr` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记: 0-正常 1-删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_event_id` (`event_id`),
+  KEY `idx_review_time` (`review_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='复盘记录表';
+
+-- 事件合并关联表
+CREATE TABLE IF NOT EXISTS `fod_event_merge` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `parent_event_id` BIGINT NOT NULL COMMENT '主事件ID',
+  `child_event_id` BIGINT NOT NULL COMMENT '被合并的子事件ID',
+  `child_event_no` VARCHAR(32) NOT NULL COMMENT '子事件编号',
+  `merge_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '合并时间',
+  `merge_reason` VARCHAR(512) DEFAULT NULL COMMENT '合并原因',
+  `operator_id` VARCHAR(64) DEFAULT NULL COMMENT '操作人ID',
+  `operator_name` VARCHAR(64) DEFAULT NULL COMMENT '操作人姓名',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_parent_event_id` (`parent_event_id`),
+  KEY `idx_child_event_id` (`child_event_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件合并关联表';

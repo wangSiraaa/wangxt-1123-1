@@ -35,4 +35,8 @@ public interface FodEventService extends IService<FodEvent> {
     Result<Map<String, Integer>> getStatistics();
 
     void updatePhotoCount(Long eventId);
+
+    Result<List<FodEvent>> getMergedChildEvents(Long parentEventId);
+
+    Result<FodEvent> getMergedParentEvent(Long childEventId);
 }

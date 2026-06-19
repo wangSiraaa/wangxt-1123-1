@@ -4,7 +4,8 @@ public enum RunwayStatusEnum {
 
     NORMAL(1, "正常"),
     FROZEN(2, "冻结"),
-    MAINTENANCE(3, "维修中");
+    MAINTENANCE(3, "维修中"),
+    RESTRICTED(4, "受限");
 
     private final Integer code;
     private final String desc;

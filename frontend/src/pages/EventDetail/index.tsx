@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card, Descriptions, Tag, Button, Space, Image, Timeline, Upload, message, Modal,
-  Form, Input, Select, Radio, List, Typography, Divider, Row, Col, Popconfirm, Alert
+  Form, Input, Select, Radio, List, Typography, Divider, Row, Col, Popconfirm, Alert, DatePicker, Badge
 } from 'antd';
 import {
   ArrowLeftOutlined, UploadOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  PlayCircleOutlined, LockOutlined
+  PlayCircleOutlined, LockOutlined, MergeCellsOutlined, FileSearchOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { eventApi } from '@/api/event';
 import { photoApi } from '@/api/photo';
 import { eventLogApi, runwayApi, clearanceApi } from '@/api';
-import type { FodEvent, FodPhoto, FodEventLog, FodClearance, Runway } from '@/types';
+import type { FodEvent, FodPhoto, FodEventLog, FodClearance, Runway, FodReview } from '@/types';
 import {
-  EventStatusMap, RiskLevelMap, PhotoTypeMap, RoleMap,
-  EventStatusEnum, RiskLevelEnum, RoleEnum, PhotoTypeEnum,
+  EventStatusMap, RiskLevelMap, PhotoTypeMap, RoleMap, RunwayStatusMap,
+  EventStatusEnum, RiskLevelEnum, RoleEnum, PhotoTypeEnum, ClearanceOperationMap, ReviewTypeMap,
 } from '@/constants';
 import { useUser } from '@/context/UserContext';
 
@@ -33,16 +33,21 @@ const EventDetail: React.FC = () => {
   const [logs, setLogs] = useState<FodEventLog[]>([]);
   const [clearances, setClearances] = useState<FodClearance[]>([]);
   const [runway, setRunway] = useState<Runway | null>(null);
+  const [reviews, setReviews] = useState<FodReview[]>([]);
+  const [mergedChildren, setMergedChildren] = useState<FodEvent[]>([]);
+  const [mergedParent, setMergedParent] = useState<FodEvent | null>(null);
   const [loading, setLoading] = useState(false);
   const [evaluateVisible, setEvaluateVisible] = useState(false);
   const [handleVisible, setHandleVisible] = useState(false);
   const [closeVisible, setCloseVisible] = useState(false);
   const [clearanceVisible, setClearanceVisible] = useState(false);
   const [riskVisible, setRiskVisible] = useState(false);
+  const [reviewVisible, setReviewVisible] = useState(false);
   const [form] = Form.useForm();
   const [handleForm] = Form.useForm();
   const [closeForm] = Form.useForm();
   const [clearanceForm] = Form.useForm();
+  const [reviewForm] = Form.useForm();
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -66,8 +71,21 @@ const EventDetail: React.FC = () => {
       setLogs(logRes.data || []);
       setClearances(clearanceRes.data || []);
       if (eventRes.data) {
-        const runwayRes = await runwayApi.getById(eventRes.data.runwayId);
+        const [runwayRes, reviewRes] = await Promise.all([
+          runwayApi.getById(eventRes.data.runwayId),
+          eventApi.getReviews(eventRes.data.id),
+        ]);
         setRunway(runwayRes.data || null);
+        setReviews(reviewRes.data || []);
+
+        if (eventRes.data.mergeCount > 0) {
+          const childRes = await eventApi.getMergedChildren(eventRes.data.id);
+          setMergedChildren(childRes.data || []);
+        }
+        if (eventRes.data.mergedParentId) {
+          const parentRes = await eventApi.getMergedParent(eventRes.data.id);
+          setMergedParent(parentRes.data || null);
+        }
       }
     } finally {
       setLoading(false);
@@ -121,6 +139,9 @@ const EventDetail: React.FC = () => {
         handleResult: values.handleResult,
         handlerId: userId,
         handlerName: userName,
+        estimatedRecoveryTime: values.estimatedRecoveryTime
+          ? dayjs(values.estimatedRecoveryTime).format('YYYY-MM-DD HH:mm:ss')
+          : undefined,
       });
       message.success('处理完成');
       setHandleVisible(false);
@@ -186,6 +207,25 @@ const EventDetail: React.FC = () => {
     } catch (e) {}
   };
 
+  const handleAddReview = async (values: any) => {
+    if (!event) return;
+    try {
+      await eventApi.addReview({
+        eventId: event.id,
+        reviewContent: values.reviewContent,
+        reviewType: values.reviewType,
+        reviewerId: userId,
+        reviewerName: userName,
+        attachmentUrls: values.attachmentUrls,
+        remark: values.remark,
+      });
+      message.success('复盘记录已追加');
+      setReviewVisible(false);
+      reviewForm.resetFields();
+      loadData(event.id);
+    } catch (e) {}
+  };
+
   const canEvaluate = () => {
     if (!event) return false;
     return (
@@ -224,7 +264,10 @@ const EventDetail: React.FC = () => {
     return (
       userRole === RoleEnum.TOWER_CONTROLLER &&
       event.riskLevelLocked !== 1 &&
-      (event.status === EventStatusEnum.REPORTED || event.status === EventStatusEnum.EVALUATING)
+      (event.status === EventStatusEnum.REPORTED ||
+       event.status === EventStatusEnum.EVALUATING ||
+       event.status === EventStatusEnum.NOT_AFFECT ||
+       event.status === EventStatusEnum.AFFECT)
     );
   };
 
@@ -233,6 +276,14 @@ const EventDetail: React.FC = () => {
     return (
       userRole === RoleEnum.FIELD_INSPECTOR &&
       event.status <= EventStatusEnum.EVALUATING
+    );
+  };
+
+  const canAddReview = () => {
+    if (!event) return false;
+    return (
+      userRole === RoleEnum.TOWER_CONTROLLER &&
+      event.riskLevelLocked === 1
     );
   };
 
@@ -245,6 +296,14 @@ const EventDetail: React.FC = () => {
     if (!level) return <Tag>-</Tag>;
     const info = RiskLevelMap[level];
     return <Tag color={info.color}>{info.label}风险</Tag>;
+  };
+
+  const renderRunwayStatus = () => {
+    if (!runway) return null;
+    const info = RunwayStatusMap[runway.status];
+    if (!info) return null;
+    if (runway.status === 1) return null;
+    return <Tag color={info.color} style={{ marginLeft: 8 }}>{info.label}</Tag>;
   };
 
   if (!event) {
@@ -267,6 +326,16 @@ const EventDetail: React.FC = () => {
             风险等级已锁定
           </Tag>
         )}
+        {event.mergeCount > 0 && (
+          <Tag color="purple" icon={<MergeCellsOutlined />}>
+            重点事件 · 已合并{event.mergeCount}条
+          </Tag>
+        )}
+        {event.mergedParentId && (
+          <Tag color="cyan" icon={<MergeCellsOutlined />}>
+            已合并到父事件
+          </Tag>
+        )}
       </Space>
 
       <Row gutter={16}>
@@ -279,7 +348,7 @@ const EventDetail: React.FC = () => {
               <Descriptions.Item label="状态">{renderStatusTag(event.status)}</Descriptions.Item>
               <Descriptions.Item label="跑道">
                 {runway?.runwayName || event.runwayCode}
-                {runway?.isFrozen === 1 && <Tag color="red" style={{ marginLeft: 8 }}>已冻结</Tag>}
+                {renderRunwayStatus()}
               </Descriptions.Item>
               <Descriptions.Item label="风险等级">
                 {renderRiskTag(event.riskLevel)}
@@ -314,6 +383,11 @@ const EventDetail: React.FC = () => {
                   : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="处理结果">{event.handleResult || '-'}</Descriptions.Item>
+              <Descriptions.Item label="预计恢复时间">
+                {event.estimatedRecoveryTime
+                  ? dayjs(event.estimatedRecoveryTime).format('YYYY-MM-DD HH:mm:ss')
+                  : '-'}
+              </Descriptions.Item>
               <Descriptions.Item label="关闭人">{event.closerName || '-'}</Descriptions.Item>
               <Descriptions.Item label="关闭时间">
                 {event.closeTime ? dayjs(event.closeTime).format('YYYY-MM-DD HH:mm:ss') : '-'}
@@ -360,6 +434,11 @@ const EventDetail: React.FC = () => {
                   <LockOutlined /> 放行操作
                 </Button>
               )}
+              {canAddReview() && (
+                <Button onClick={() => setReviewVisible(true)}>
+                  <FileSearchOutlined /> 追加复盘
+                </Button>
+              )}
               {canCancel() && (
                 <Popconfirm title="确认取消该事件？" onConfirm={handleCancel}>
                   <Button danger>
@@ -369,6 +448,47 @@ const EventDetail: React.FC = () => {
               )}
             </Space>
           </Card>
+
+          {event.mergeCount > 0 && (
+            <Card
+              title={<><MergeCellsOutlined /> 合并事件 ({event.mergeCount}条)</>}
+              style={{ marginBottom: 16 }}
+            >
+              <List
+                size="small"
+                dataSource={mergedChildren}
+                renderItem={(child) => (
+                  <List.Item
+                    extra={
+                      <Button type="link" size="small" onClick={() => navigate(`/event/${child.id}`)}>
+                        查看
+                      </Button>
+                    }
+                  >
+                    <List.Item.Meta
+                      title={<code style={{ color: '#1890ff' }}>{child.eventNo}</code>}
+                      description={`${child.fodType || '-'} · ${dayjs(child.reportTime).format('YYYY-MM-DD HH:mm')} · ${child.reporterName || '-'}`}
+                    />
+                  </List.Item>
+                )}
+              />
+            </Card>
+          )}
+
+          {mergedParent && (
+            <Card
+              title={<><MergeCellsOutlined /> 所属父事件</>}
+              style={{ marginBottom: 16 }}
+            >
+              <Space>
+                <Text>本事件已合并到：</Text>
+                <Button type="link" onClick={() => navigate(`/event/${mergedParent.id}`)}>
+                  {mergedParent.eventNo}
+                </Button>
+                <Tag color="purple">合并{mergedParent.mergeCount}条</Tag>
+              </Space>
+            </Card>
+          )}
 
           <Card title="现场照片" style={{ marginBottom: 16 }}>
             {photos.length === 0 ? (
@@ -417,6 +537,42 @@ const EventDetail: React.FC = () => {
             )}
           </Card>
 
+          <Card title="复盘记录" style={{ marginBottom: 16 }}
+            extra={canAddReview() && (
+              <Button size="small" icon={<FileSearchOutlined />} onClick={() => setReviewVisible(true)}>
+                追加复盘
+              </Button>
+            )}
+          >
+            {reviews.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>暂无复盘记录</div>
+            ) : (
+              <Timeline
+                items={reviews.map((review) => {
+                  const typeInfo = ReviewTypeMap[review.reviewType] || ReviewTypeMap[1];
+                  return {
+                    color: typeInfo.color,
+                    children: (
+                      <div>
+                        <Space>
+                          <Tag color={typeInfo.color}>{typeInfo.label}</Tag>
+                          <Text strong>{review.reviewerName}</Text>
+                          <Text type="secondary">
+                            {dayjs(review.reviewTime).format('YYYY-MM-DD HH:mm:ss')}
+                          </Text>
+                        </Space>
+                        <div style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{review.reviewContent}</div>
+                        {review.remark && (
+                          <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>备注: {review.remark}</div>
+                        )}
+                      </div>
+                    ),
+                  };
+                })}
+              />
+            )}
+          </Card>
+
           <Card title="操作日志">
             {logs.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>暂无操作日志</div>
@@ -424,7 +580,7 @@ const EventDetail: React.FC = () => {
               <Timeline
                 className="status-timeline"
                 items={logs.map((log) => ({
-                  color: log.afterStatus === EventStatusEnum.CLOSED ? 'green' : 
+                  color: log.afterStatus === EventStatusEnum.CLOSED ? 'green' :
                          log.afterStatus === EventStatusEnum.CANCELLED ? 'gray' : 'blue',
                   children: (
                     <div>
@@ -459,32 +615,33 @@ const EventDetail: React.FC = () => {
               <List
                 size="small"
                 dataSource={clearances}
-                renderItem={(item) => (
-                  <List.Item>
-                    <List.Item.Meta
-                      title={
-                        <Space>
-                          <Tag
-                            color={
-                              item.operationType === 1 || item.operationType === 4 ? 'red' : 'green'
-                            }
-                          >
-                            {PhotoTypeMap[item.operationType as keyof typeof PhotoTypeMap] || item.operationType}
-                          </Tag>
-                          <Text>{item.operatorName}</Text>
-                        </Space>
-                      }
-                      description={
-                        <div>
-                          <div>{item.reason}</div>
-                          <div style={{ color: '#999', fontSize: 12 }}>
-                            {dayjs(item.operateTime).format('YYYY-MM-DD HH:mm:ss')}
+                renderItem={(item) => {
+                  const opLabel = ClearanceOperationMap[item.operationType] || `操作${item.operationType}`;
+                  const isRestrict = item.operationType === 5 || item.operationType === 1 || item.operationType === 4;
+                  return (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={
+                          <Space>
+                            <Tag color={isRestrict ? 'red' : 'green'}>
+                              {opLabel}
+                            </Tag>
+                            <Text>{item.operatorName}</Text>
+                          </Space>
+                        }
+                        description={
+                          <div>
+                            <div>{item.reason}</div>
+                            {item.remark && <div style={{ color: '#999', fontSize: 12, fontStyle: 'italic' }}>{item.remark}</div>}
+                            <div style={{ color: '#999', fontSize: 12 }}>
+                              {dayjs(item.operateTime).format('YYYY-MM-DD HH:mm:ss')}
+                            </div>
                           </div>
-                        </div>
-                      }
-                    />
-                  </List.Item>
-                )}
+                        }
+                      />
+                    </List.Item>
+                  );
+                }}
               />
             )}
           </Card>
@@ -539,7 +696,7 @@ const EventDetail: React.FC = () => {
           >
             <Radio.Group>
               <Radio value={1} style={{ color: '#f5222d' }}>
-                影响起降（自动置顶并冻结跑道）
+                影响起降（自动置顶并将跑道切换为受限状态）
               </Radio>
               <Radio value={0} style={{ color: '#52c41a' }}>
                 不影响起降
@@ -565,6 +722,7 @@ const EventDetail: React.FC = () => {
         open={handleVisible}
         onCancel={() => setHandleVisible(false)}
         footer={null}
+        width={600}
       >
         <Form form={handleForm} layout="vertical" onFinish={handleCompleteHandle}>
           <Form.Item
@@ -573,6 +731,16 @@ const EventDetail: React.FC = () => {
             rules={[{ required: true, message: '请输入处理结果' }]}
           >
             <TextArea rows={4} placeholder="请详细描述处理结果" />
+          </Form.Item>
+          <Form.Item
+            name="estimatedRecoveryTime"
+            label="预计恢复时间"
+          >
+            <DatePicker
+              showTime
+              style={{ width: '100%' }}
+              placeholder="请选择预计恢复时间"
+            />
           </Form.Item>
           <Form.Item>
             <Space>
@@ -631,6 +799,8 @@ const EventDetail: React.FC = () => {
               <Option value={2}>解除冻结</Option>
               <Option value={3}>允许放行</Option>
               <Option value={4}>禁止放行</Option>
+              <Option value={5}>限制跑道</Option>
+              <Option value={6}>解除限制</Option>
             </Select>
           </Form.Item>
           <Form.Item
@@ -639,6 +809,9 @@ const EventDetail: React.FC = () => {
             rules={[{ required: true, message: '请输入操作原因' }]}
           >
             <TextArea rows={3} placeholder="请输入操作原因" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <TextArea rows={2} placeholder="备注信息" />
           </Form.Item>
           <Form.Item>
             <Space>
@@ -674,6 +847,46 @@ const EventDetail: React.FC = () => {
             极高风险
           </Radio>
         </Radio.Group>
+      </Modal>
+
+      <Modal
+        title="追加复盘记录"
+        open={reviewVisible}
+        onCancel={() => setReviewVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <Form form={reviewForm} layout="vertical" onFinish={handleAddReview}>
+          <Form.Item
+            name="reviewType"
+            label="复盘类型"
+            initialValue={1}
+          >
+            <Radio.Group>
+              <Radio value={1}>一般复盘</Radio>
+              <Radio value={2}>重点复盘</Radio>
+              <Radio value={3}>整改措施</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item
+            name="reviewContent"
+            label="复盘内容"
+            rules={[{ required: true, message: '请输入复盘内容' }]}
+          >
+            <TextArea rows={5} placeholder="请详细描述复盘内容" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <TextArea rows={2} placeholder="可选备注" />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                确认追加
+              </Button>
+              <Button onClick={() => setReviewVisible(false)}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Modal>
 
       <Modal

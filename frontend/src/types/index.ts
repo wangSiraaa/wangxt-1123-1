@@ -70,6 +70,9 @@ export interface FodEvent {
   hasPhoto: number;
   photoCount: number;
   remark?: string;
+  estimatedRecoveryTime?: string;
+  mergeCount: number;
+  mergedParentId?: number;
   createTime: string;
   updateTime: string;
 }
@@ -150,6 +153,7 @@ export interface EventHandleDTO {
   handleResult: string;
   handlerId?: string;
   handlerName?: string;
+  estimatedRecoveryTime?: string;
 }
 
 export interface EventCloseDTO {
@@ -169,3 +173,40 @@ export interface ClearanceOperationDTO {
 }
 
 export type UserRole = 'FIELD_INSPECTOR' | 'TOWER_CONTROLLER' | 'MAINTENANCE_TEAM';
+
+export interface FodReview {
+  id: number;
+  eventId: number;
+  eventNo: string;
+  reviewContent: string;
+  reviewType: number;
+  reviewerId?: string;
+  reviewerName?: string;
+  reviewTime: string;
+  attachmentUrls?: string;
+  remark?: string;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface FodEventMerge {
+  id: number;
+  parentEventId: number;
+  childEventId: number;
+  childEventNo: string;
+  mergeTime: string;
+  mergeReason?: string;
+  operatorId?: string;
+  operatorName?: string;
+  createTime: string;
+}
+
+export interface ReviewAddDTO {
+  eventId: number;
+  reviewContent: string;
+  reviewType?: number;
+  reviewerId?: string;
+  reviewerName?: string;
+  attachmentUrls?: string;
+  remark?: string;
+}

@@ -5,7 +5,9 @@ public enum ClearanceOperationEnum {
     FREEZE_RUNWAY(1, "冻结跑道"),
     UNFREEZE_RUNWAY(2, "解除冻结"),
     ALLOW_CLEARANCE(3, "允许放行"),
-    DENY_CLEARANCE(4, "禁止放行");
+    DENY_CLEARANCE(4, "禁止放行"),
+    RESTRICT_RUNWAY(5, "限制跑道"),
+    UNRESTRICT_RUNWAY(6, "解除限制");
 
     private final Integer code;
     private final String desc;

@@ -18,4 +18,10 @@ public interface FodClearanceService extends IService<FodClearance> {
     void freezeRunway(Long runwayId, Long eventId, String eventNo, String operatorId, String operatorName, String reason);
 
     void unfreezeRunway(Long runwayId, Long eventId, String eventNo, String operatorId, String operatorName, String reason);
+
+    void restrictRunway(Long runwayId, Long eventId, String eventNo, String operatorId, String operatorName, String reason);
+
+    void unrestrictRunway(Long runwayId, Long eventId, String eventNo, String operatorId, String operatorName, String reason);
+
+    List<FodClearance> getUncompletedByRunwayId(Long runwayId);
 }

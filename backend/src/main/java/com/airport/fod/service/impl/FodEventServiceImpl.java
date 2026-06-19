@@ -9,6 +9,7 @@ import com.airport.fod.constant.FodConstants;
 import com.airport.fod.dto.*;
 import com.airport.fod.entity.FodEvent;
 import com.airport.fod.entity.FodEventLog;
+import com.airport.fod.entity.FodEventMerge;
 import com.airport.fod.entity.FodPhoto;
 import com.airport.fod.entity.Runway;
 import com.airport.fod.enums.EventStatusEnum;
@@ -42,12 +43,20 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
     @Autowired
     private FodEventLogService eventLogService;
 
+    @Autowired
+    private FodEventMergeService eventMergeService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result<Long> reportEvent(EventReportDTO dto) {
         Runway runway = runwayService.getById(dto.getRunwayId());
         if (runway == null) {
             return Result.error("跑道不存在");
+        }
+
+        FodEvent existingEvent = baseMapper.findSameLocationToday(dto.getRunwayId(), dto.getLocation());
+        if (existingEvent != null && BusinessRules.canMergeEvent(existingEvent.getStatus())) {
+            return mergeIntoExistingEvent(existingEvent, dto);
         }
 
         FodEvent event = new FodEvent();
@@ -65,6 +74,8 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
         event.setIsTop(0);
         event.setHasPhoto(0);
         event.setPhotoCount(0);
+        event.setMergeCount(0);
+        event.setMergedParentId(null);
         event.setReporterId(dto.getReporterId() != null ? dto.getReporterId() : FodConstants.DEFAULT_USER_ID);
         event.setReporterName(dto.getReporterName() != null ? dto.getReporterName() : FodConstants.DEFAULT_USER_NAME);
         event.setReportTime(LocalDateTime.now());
@@ -76,6 +87,62 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
             null, event.getStatus(), null, null, "上报异物事件");
 
         return Result.success("上报成功", event.getId());
+    }
+
+    private Result<Long> mergeIntoExistingEvent(FodEvent existingEvent, EventReportDTO dto) {
+        FodEvent newEvent = new FodEvent();
+        newEvent.setEventNo(FodConstants.EVENT_NO_PREFIX + DateUtil.format(LocalDateTime.now(), "yyyyMMddHHmmss")
+            + StrUtil.fillBefore(String.valueOf((int) (Math.random() * 10000)), '0', 4));
+        newEvent.setRunwayId(dto.getRunwayId());
+        newEvent.setRunwayCode(existingEvent.getRunwayCode());
+        newEvent.setLocation(dto.getLocation());
+        newEvent.setLocationPoint(dto.getLocationPoint());
+        newEvent.setFodType(dto.getFodType());
+        newEvent.setFodSize(dto.getFodSize());
+        newEvent.setDescription(dto.getDescription());
+        newEvent.setStatus(EventStatusEnum.CANCELLED.getCode());
+        newEvent.setRiskLevelLocked(0);
+        newEvent.setIsTop(0);
+        newEvent.setHasPhoto(0);
+        newEvent.setPhotoCount(0);
+        newEvent.setMergeCount(0);
+        newEvent.setMergedParentId(existingEvent.getId());
+        newEvent.setReporterId(dto.getReporterId() != null ? dto.getReporterId() : FodConstants.DEFAULT_USER_ID);
+        newEvent.setReporterName(dto.getReporterName() != null ? dto.getReporterName() : FodConstants.DEFAULT_USER_NAME);
+        newEvent.setReportTime(LocalDateTime.now());
+
+        save(newEvent);
+
+        existingEvent.setMergeCount(existingEvent.getMergeCount() != null ? existingEvent.getMergeCount() + 1 : 1);
+        if (dto.getDescription() != null) {
+            String mergedDesc = existingEvent.getDescription() != null
+                ? existingEvent.getDescription() + "；[合并追加]" + dto.getDescription()
+                : "[合并追加]" + dto.getDescription();
+            existingEvent.setDescription(mergedDesc);
+        }
+        updateById(existingEvent);
+
+        FodEventMerge mergeRecord = new FodEventMerge();
+        mergeRecord.setParentEventId(existingEvent.getId());
+        mergeRecord.setChildEventId(newEvent.getId());
+        mergeRecord.setChildEventNo(newEvent.getEventNo());
+        mergeRecord.setMergeTime(LocalDateTime.now());
+        mergeRecord.setMergeReason("同一位置当日重复上报，自动合并");
+        mergeRecord.setOperatorId(FodConstants.DEFAULT_USER_ID);
+        mergeRecord.setOperatorName(FodConstants.DEFAULT_USER_NAME);
+        eventMergeService.save(mergeRecord);
+
+        eventLogService.saveLog(newEvent.getId(), newEvent.getEventNo(), FodConstants.OPERATION_MERGE,
+            newEvent.getReporterId(), newEvent.getReporterName(), RoleEnum.FIELD_INSPECTOR.getCode(),
+            null, newEvent.getStatus(), null, null,
+            "同一位置重复上报，合并到事件" + existingEvent.getEventNo());
+
+        eventLogService.saveLog(existingEvent.getId(), existingEvent.getEventNo(), FodConstants.OPERATION_MERGE,
+            FodConstants.DEFAULT_USER_ID, FodConstants.DEFAULT_USER_NAME, null,
+            null, null, null, null,
+            "合并子事件" + newEvent.getEventNo() + "，累计合并" + existingEvent.getMergeCount() + "次");
+
+        return Result.success("同一位置当日已有上报，已自动合并到事件" + existingEvent.getEventNo(), existingEvent.getId());
     }
 
     @Override
@@ -171,16 +238,16 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
         }
 
         event.setStatus(newStatus);
-        event.setRiskLevelLocked(1);
+        event.setRiskLevelLocked(0);
 
         boolean isTop = BusinessRules.isTopStatus(newStatus);
         event.setIsTop(isTop ? 1 : 0);
 
         updateById(event);
 
-        if (BusinessRules.shouldFreezeRunway(newStatus)) {
-            clearanceService.freezeRunway(event.getRunwayId(), event.getId(), event.getEventNo(),
-                event.getEvaluatorId(), event.getEvaluatorName(), "异物影响起降，自动冻结跑道");
+        if (BusinessRules.shouldRestrictRunway(newStatus)) {
+            clearanceService.restrictRunway(event.getRunwayId(), event.getId(), event.getEventNo(),
+                event.getEvaluatorId(), event.getEvaluatorName(), "异物影响起降，跑道切换为受限状态");
         }
 
         eventLogService.saveLog(event.getId(), event.getEventNo(), FodConstants.OPERATION_EVALUATE,
@@ -248,6 +315,7 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
         event.setHandlerId(dto.getHandlerId() != null ? dto.getHandlerId() : FodConstants.DEFAULT_USER_ID);
         event.setHandlerName(dto.getHandlerName() != null ? dto.getHandlerName() : FodConstants.DEFAULT_USER_NAME);
         event.setHandleEndTime(LocalDateTime.now());
+        event.setEstimatedRecoveryTime(dto.getEstimatedRecoveryTime());
 
         updateById(event);
 
@@ -287,12 +355,13 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
         event.setCloserName(dto.getCloserName() != null ? dto.getCloserName() : FodConstants.DEFAULT_USER_NAME);
         event.setCloseTime(LocalDateTime.now());
         event.setIsTop(0);
+        event.setRiskLevelLocked(1);
 
         updateById(event);
 
         if (event.getAffectTakeoff() != null && event.getAffectTakeoff() == 1) {
-            clearanceService.unfreezeRunway(event.getRunwayId(), event.getId(), event.getEventNo(),
-                event.getCloserId(), event.getCloserName(), "事件已关闭，解除跑道冻结");
+            clearanceService.unrestrictRunway(event.getRunwayId(), event.getId(), event.getEventNo(),
+                event.getCloserId(), event.getCloserName(), "事件已关闭，解除跑道限制");
         }
 
         eventLogService.saveLog(event.getId(), event.getEventNo(), FodConstants.OPERATION_CLOSE,
@@ -384,5 +453,32 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
         event.setPhotoCount(count);
         event.setHasPhoto(count > 0 ? 1 : 0);
         updateById(event);
+    }
+
+    @Override
+    public Result<List<FodEvent>> getMergedChildEvents(Long parentEventId) {
+        List<FodEventMerge> mergeRecords = eventMergeService.getByParentEventId(parentEventId);
+        if (mergeRecords.isEmpty()) {
+            return Result.success(java.util.Collections.emptyList());
+        }
+        List<Long> childIds = new java.util.ArrayList<>();
+        for (FodEventMerge merge : mergeRecords) {
+            childIds.add(merge.getChildEventId());
+        }
+        return Result.success(listByIds(childIds));
+    }
+
+    @Override
+    public Result<FodEvent> getMergedParentEvent(Long childEventId) {
+        List<FodEventMerge> mergeRecords = eventMergeService.getByChildEventId(childEventId);
+        if (mergeRecords.isEmpty()) {
+            return Result.error("该事件未被合并");
+        }
+        Long parentEventId = mergeRecords.get(0).getParentEventId();
+        FodEvent parent = getById(parentEventId);
+        if (parent == null) {
+            return Result.error("父事件不存在");
+        }
+        return Result.success(parent);
     }
 }

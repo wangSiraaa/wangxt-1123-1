@@ -268,7 +268,7 @@ const TowerEvaluate: React.FC = () => {
           >
             <Radio.Group>
               <Radio value={1} style={{ color: '#f5222d' }}>
-                影响起降（自动置顶并冻结跑道）
+                影响起降（自动置顶并将跑道切换为受限状态）
               </Radio>
               <Radio value={0} style={{ color: '#52c41a' }}>
                 不影响起降

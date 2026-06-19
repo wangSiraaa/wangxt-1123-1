@@ -61,6 +61,14 @@ public class FodClearanceServiceImpl extends ServiceImpl<FodClearanceMapper, Fod
             eventService.updateById(event);
         } else if (ClearanceOperationEnum.UNFREEZE_RUNWAY.getCode().equals(dto.getOperationType())) {
             updateRunwayStatus(runway, RunwayStatusEnum.NORMAL.getCode(), null, null, null);
+        } else if (ClearanceOperationEnum.RESTRICT_RUNWAY.getCode().equals(dto.getOperationType())) {
+            updateRunwayStatus(runway, RunwayStatusEnum.RESTRICTED.getCode(), dto.getReason(),
+                dto.getOperatorId(), dto.getOperatorName());
+        } else if (ClearanceOperationEnum.UNRESTRICT_RUNWAY.getCode().equals(dto.getOperationType())) {
+            updateRunwayStatus(runway, RunwayStatusEnum.NORMAL.getCode(), null, null, null);
+        } else if (ClearanceOperationEnum.ALLOW_CLEARANCE.getCode().equals(dto.getOperationType())) {
+            event.setRiskLevelLocked(1);
+            eventService.updateById(event);
         }
 
         clearance.setAfterStatus(runway.getStatus());
@@ -179,7 +187,7 @@ public class FodClearanceServiceImpl extends ServiceImpl<FodClearanceMapper, Fod
     private void updateRunwayStatus(Runway runway, Integer status, String freezeReason,
                                      String freezeOperator, String freezeOperatorName) {
         runway.setStatus(status);
-        if (RunwayStatusEnum.FROZEN.getCode().equals(status)) {
+        if (RunwayStatusEnum.FROZEN.getCode().equals(status) || RunwayStatusEnum.RESTRICTED.getCode().equals(status)) {
             runway.setIsFrozen(1);
             runway.setFreezeReason(freezeReason);
             runway.setFreezeTime(LocalDateTime.now());
@@ -191,5 +199,105 @@ public class FodClearanceServiceImpl extends ServiceImpl<FodClearanceMapper, Fod
             runway.setFreezeOperator(null);
         }
         runwayService.updateById(runway);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void restrictRunway(Long runwayId, Long eventId, String eventNo, String operatorId, String operatorName, String reason) {
+        Runway runway = runwayService.getById(runwayId);
+        if (runway == null) {
+            return;
+        }
+
+        Integer beforeStatus = runway.getStatus();
+
+        FodClearance clearance = new FodClearance();
+        clearance.setEventId(eventId);
+        clearance.setEventNo(eventNo);
+        clearance.setRunwayId(runwayId);
+        clearance.setRunwayCode(runway.getRunwayCode());
+        clearance.setClearanceNo(FodConstants.CLEARANCE_NO_PREFIX + DateUtil.format(LocalDateTime.now(), "yyyyMMddHHmmss")
+            + StrUtil.fillBefore(String.valueOf((int) (Math.random() * 10000)), '0', 4));
+        clearance.setOperationType(ClearanceOperationEnum.RESTRICT_RUNWAY.getCode());
+        clearance.setOperatorId(operatorId);
+        clearance.setOperatorName(operatorName);
+        clearance.setOperateTime(LocalDateTime.now());
+        clearance.setReason(reason);
+        clearance.setBeforeStatus(beforeStatus);
+        clearance.setAfterStatus(RunwayStatusEnum.RESTRICTED.getCode());
+
+        updateRunwayStatus(runway, RunwayStatusEnum.RESTRICTED.getCode(), reason, operatorId, operatorName);
+        clearance.setAfterStatus(RunwayStatusEnum.RESTRICTED.getCode());
+
+        save(clearance);
+
+        List<FodClearance> uncompletedClearances = getUncompletedByRunwayId(runwayId);
+        for (FodClearance uc : uncompletedClearances) {
+            if (!uc.getId().equals(clearance.getId())) {
+                FodClearance linkRecord = new FodClearance();
+                linkRecord.setEventId(uc.getEventId());
+                linkRecord.setEventNo(uc.getEventNo());
+                linkRecord.setRunwayId(runwayId);
+                linkRecord.setRunwayCode(runway.getRunwayCode());
+                linkRecord.setClearanceNo(FodConstants.CLEARANCE_NO_PREFIX + DateUtil.format(LocalDateTime.now(), "yyyyMMddHHmmss")
+                    + StrUtil.fillBefore(String.valueOf((int) (Math.random() * 10000)), '0', 4));
+                linkRecord.setOperationType(ClearanceOperationEnum.RESTRICT_RUNWAY.getCode());
+                linkRecord.setOperatorId(operatorId);
+                linkRecord.setOperatorName(operatorName);
+                linkRecord.setOperateTime(LocalDateTime.now());
+                linkRecord.setReason("跑道受限联动：因事件" + eventNo + "影响起降，跑道受限");
+                linkRecord.setBeforeStatus(beforeStatus);
+                linkRecord.setAfterStatus(RunwayStatusEnum.RESTRICTED.getCode());
+                linkRecord.setRemark("联动记录");
+                save(linkRecord);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void unrestrictRunway(Long runwayId, Long eventId, String eventNo, String operatorId, String operatorName, String reason) {
+        Runway runway = runwayService.getById(runwayId);
+        if (runway == null) {
+            return;
+        }
+
+        if (!RunwayStatusEnum.RESTRICTED.getCode().equals(runway.getStatus())) {
+            return;
+        }
+
+        Integer beforeStatus = runway.getStatus();
+
+        FodClearance clearance = new FodClearance();
+        clearance.setEventId(eventId);
+        clearance.setEventNo(eventNo);
+        clearance.setRunwayId(runwayId);
+        clearance.setRunwayCode(runway.getRunwayCode());
+        clearance.setClearanceNo(FodConstants.CLEARANCE_NO_PREFIX + DateUtil.format(LocalDateTime.now(), "yyyyMMddHHmmss")
+            + StrUtil.fillBefore(String.valueOf((int) (Math.random() * 10000)), '0', 4));
+        clearance.setOperationType(ClearanceOperationEnum.UNRESTRICT_RUNWAY.getCode());
+        clearance.setOperatorId(operatorId);
+        clearance.setOperatorName(operatorName);
+        clearance.setOperateTime(LocalDateTime.now());
+        clearance.setReason(reason);
+        clearance.setBeforeStatus(beforeStatus);
+        clearance.setAfterStatus(RunwayStatusEnum.NORMAL.getCode());
+
+        updateRunwayStatus(runway, RunwayStatusEnum.NORMAL.getCode(), null, null, null);
+        clearance.setAfterStatus(RunwayStatusEnum.NORMAL.getCode());
+
+        save(clearance);
+    }
+
+    @Override
+    public List<FodClearance> getUncompletedByRunwayId(Long runwayId) {
+        LambdaQueryWrapper<FodClearance> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(FodClearance::getRunwayId, runwayId)
+            .in(FodClearance::getOperationType,
+                ClearanceOperationEnum.FREEZE_RUNWAY.getCode(),
+                ClearanceOperationEnum.RESTRICT_RUNWAY.getCode(),
+                ClearanceOperationEnum.DENY_CLEARANCE.getCode())
+            .orderByDesc(FodClearance::getOperateTime);
+        return list(wrapper);
     }
 }

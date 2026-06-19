@@ -5,6 +5,7 @@ import com.airport.fod.common.Result;
 import com.airport.fod.dto.*;
 import com.airport.fod.entity.FodEvent;
 import com.airport.fod.service.FodEventService;
+import com.airport.fod.service.FodReviewService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -22,6 +23,9 @@ public class FodEventController {
 
     @Autowired
     private FodEventService eventService;
+
+    @Autowired
+    private FodReviewService reviewService;
 
     @ApiOperation("上报异物事件")
     @PostMapping("/report")
@@ -108,5 +112,29 @@ public class FodEventController {
     @GetMapping("/statistics")
     public Result<Map<String, Integer>> getStatistics() {
         return eventService.getStatistics();
+    }
+
+    @ApiOperation("追加复盘记录")
+    @PostMapping("/review")
+    public Result<?> addReview(@RequestBody @Valid ReviewAddDTO dto) {
+        return reviewService.addReview(dto);
+    }
+
+    @ApiOperation("查询事件的复盘记录")
+    @GetMapping("/review/{eventId}")
+    public Result<?> getReviewsByEventId(@PathVariable Long eventId) {
+        return reviewService.getReviewsByEventId(eventId);
+    }
+
+    @ApiOperation("查询合并的子事件列表")
+    @GetMapping("/merged-children/{parentEventId}")
+    public Result<List<FodEvent>> getMergedChildEvents(@PathVariable Long parentEventId) {
+        return eventService.getMergedChildEvents(parentEventId);
+    }
+
+    @ApiOperation("查询合并的父事件")
+    @GetMapping("/merged-parent/{childEventId}")
+    public Result<FodEvent> getMergedParentEvent(@PathVariable Long childEventId) {
+        return eventService.getMergedParentEvent(childEventId);
     }
 }
