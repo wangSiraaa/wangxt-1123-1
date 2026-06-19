@@ -171,6 +171,7 @@ public class FodEventServiceImpl extends ServiceImpl<FodEventMapper, FodEvent> i
         }
 
         event.setStatus(newStatus);
+        event.setRiskLevelLocked(1);
 
         boolean isTop = BusinessRules.isTopStatus(newStatus);
         event.setIsTop(isTop ? 1 : 0);

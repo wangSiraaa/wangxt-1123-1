@@ -16,7 +16,8 @@ public class BusinessRules {
             Arrays.asList(EventStatusEnum.REPORTED.getCode(), EventStatusEnum.CANCELLED.getCode()));
 
         STATUS_TRANSITION_MAP.put(EventStatusEnum.REPORTED.getCode(),
-            Arrays.asList(EventStatusEnum.EVALUATING.getCode(), EventStatusEnum.CANCELLED.getCode()));
+            Arrays.asList(EventStatusEnum.EVALUATING.getCode(), EventStatusEnum.NOT_AFFECT.getCode(),
+                EventStatusEnum.AFFECT.getCode(), EventStatusEnum.CANCELLED.getCode()));
 
         STATUS_TRANSITION_MAP.put(EventStatusEnum.EVALUATING.getCode(),
             Arrays.asList(EventStatusEnum.NOT_AFFECT.getCode(), EventStatusEnum.AFFECT.getCode(),
